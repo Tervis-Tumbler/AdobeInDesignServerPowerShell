@@ -1,3 +1,6 @@
+#http://wwwimages.adobe.com/www.adobe.com/content/dam/acom/en/devnet/indesign/sdk/cc/server/intro-to-indesign-server-cc.pdf
+#https://helpx.adobe.com/indesign/using/indesign-server.html
+
 function Set-InDesignServerComputerName {
     param (
         $ComputerName
@@ -42,4 +45,65 @@ function Install-InDesignServerMMCSnapIn {
 
 function Start-InDesignServerService {
     Get-InDesignServerService | Start-Service
+}
+
+function Restart-InDesignServerService {
+    Get-InDesignServerService | Restart-Service -Force
+}
+
+function New-InDesignServerInstance {
+    param (
+        $Port
+    )
+    $GUID = New-Guid | Select-Object -ExpandProperty GUID
+    New-Item -Path HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService -Name $Guid
+    $ComputerName = Get-InDesignServerComputerName
+    $Name = "InDesignServer $Port $GUID"
+    New-TervisFirewallRule -ComputerName $ComputerName -DisplayName $Name -Name $Name -LocalPort $Port -Direction Inbound -Action Allow -Group InDesignServer
+}
+
+function Get-InDesignServerWSDLURI {
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$ComputerName,
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$Port
+    )
+    process {
+        "http://$($ComputerName):$Port/service?wsdl"
+    }
+}
+
+function Get-InDesignServerWSDL {
+    Invoke-WebRequest -Uri (
+        Get-InDesignServerWSDLURI -ComputerName (
+            Get-InDesignServerComputerName
+        ) -Port 8080
+    )
+}
+
+function Invoke-ProgisticsAPI {
+    param (
+        $MethodName,
+        $Parameter,
+        $Property
+    )
+
+    $Proxy = New-WebServiceProxy -Uri (
+        Get-InDesignServerWSDLURI -ComputerName (
+            Get-InDesignServerComputerName
+        ) -Port 8080
+    ) -Class InDesignServer -Namespace InDesignServer
+
+    if (-not $Parameter) {
+        if ($Property) {
+            $Parameter = New-Object -TypeName Progistics."$($MethodName)Request" -Property $Property
+        } else {
+            $Parameter = New-Object -TypeName Progistics."$($MethodName)Request"
+        }
+    }
+    $Response = $Proxy.$MethodName($Parameter)
+    $Response.result
+}
+
+function Invoke-InDesignServerRunScript {
+    $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters
 }
