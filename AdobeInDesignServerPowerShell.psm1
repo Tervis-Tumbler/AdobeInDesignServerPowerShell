@@ -105,5 +105,12 @@ function Invoke-ProgisticsAPI {
 }
 
 function Invoke-InDesignServerRunScript {
+    param (
+        $ScriptConent
+    )
+
+    $Proxy
+    
     $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters
+    $Proxy.RunScript($RunScriptParameters)
 }
