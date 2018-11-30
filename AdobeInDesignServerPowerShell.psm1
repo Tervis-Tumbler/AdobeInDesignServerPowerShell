@@ -6,6 +6,9 @@ function Set-InDesignServerComputerName {
         $ComputerName
     )
     $Script:ComputerName = $ComputerName
+    $Script:Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
+        Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
+    )
 }
 
 function Get-InDesignServerComputerName {
@@ -73,11 +76,27 @@ function Get-InDesignServerWSDLURI {
 }
 
 function Get-InDesignServerWSDL {
+    param (
+        $ComputerName = (Get-InDesignServerComputerName),
+        $Port = 8080
+    )
     Invoke-WebRequest -Uri (
-        Get-InDesignServerWSDLURI -ComputerName (
-            Get-InDesignServerComputerName
-        ) -Port 8080
-    ) -UseDefaultCredentials
+        Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
+    ) | 
+    Select-Object -ExpandProperty Content |
+    Replace-ContentValue -OldValue @"
+<SOAP:address location="http://localhost:$Port"/>
+"@ -NewValue @"
+<SOAP:address location="http://$($ComputerName):$Port"/>
+"@
+}
+
+function Get-InDesignServerWebServiceProxy {
+    if ($Script:Proxy) {
+        $Script:Proxy
+    } else {
+        Throw "No proxy object found, Set-InDesignServerComputerName needs to be called first"
+    }
 }
 
 function Invoke-InDesignServerAPI {
@@ -86,18 +105,13 @@ function Invoke-InDesignServerAPI {
         $Parameter,
         $Property
     )
-
-    $Proxy = New-WebServiceProxy -Uri (
-        Get-InDesignServerWSDLURI -ComputerName (
-            Get-InDesignServerComputerName
-        ) -Port 8080
-    ) -Class InDesignServer -Namespace InDesignServer
+    $Proxy = Get-InDesignServerWebServiceProxy
 
     if (-not $Parameter) {
         if ($Property) {
-            $Parameter = New-Object -TypeName Progistics."$($MethodName)Request" -Property $Property
+            $Parameter = New-Object -TypeName InDesignServer."$($MethodName)Parameters" -Property $Property
         } else {
-            $Parameter = New-Object -TypeName Progistics."$($MethodName)Request"
+            $Parameter = New-Object -TypeName InDesignServer."$($MethodName)Parameters"
         }
     }
     $Response = $Proxy.$MethodName($Parameter)
@@ -111,18 +125,31 @@ function Invoke-InDesignServerRunScript {
         $ScriptFile,
         $ScriptArgs
     )    
-    $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters -Property $PSBoundParameters
-    $Proxy.RunScript($RunScriptParameters)
+    #Invoke-InDesignServerAPI -MethodName RunScript -Property $PSBoundParameters
+
+    $Proxy = Get-InDesignServerWebServiceProxy
+    $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property $PSBoundParameters
+    $ErrorString = ""
+    $Results = New-Object -TypeName InDesignServer.Data
+
+    $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+    $Response.result
 }
 
 function Invoke-InDesignServerJSX {
     param (
         $ScriptConent
     )
+    Invoke-InDesignServerRunScript -ScriptText $ScriptConent -ScriptLanguage "JavaScript"
+}
 
-    $Proxy
-    
-    $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters
-    $RunScriptParameters.scriptText = 
-    $Proxy.RunScript($RunScriptParameters)
+function Set-InDesingServerJobOption {
+    param (
+        $LocalPathToJobOptions
+    )
+    $LocalPathToJobOptions
+    $PathToJobOptionsFolder = "C:\Program Files\Adobe\Adobe InDesign CC Server 2018\Resources\Adobe PDF\settings\mul"
+    $InDesignServerComputerName = Get-InDesignServerComputerName
+    $PathToJobOptionsFolderRemote = $PathToJobOptionsFolder | ConvertTo-RemotePath -ComputerName $InDesignServerComputerName
+    Copy-Item -Path $LocalPathToJobOptions -Destination $PathToJobOptionsFolderRemote
 }
