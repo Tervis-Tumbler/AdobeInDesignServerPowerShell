@@ -77,10 +77,10 @@ function Get-InDesignServerWSDL {
         Get-InDesignServerWSDLURI -ComputerName (
             Get-InDesignServerComputerName
         ) -Port 8080
-    )
+    ) -UseDefaultCredentials
 }
 
-function Invoke-ProgisticsAPI {
+function Invoke-InDesignServerAPI {
     param (
         $MethodName,
         $Parameter,
@@ -106,11 +106,23 @@ function Invoke-ProgisticsAPI {
 
 function Invoke-InDesignServerRunScript {
     param (
+        $ScriptText,
+        $ScriptLanguage,
+        $ScriptFile,
+        $ScriptArgs
+    )    
+    $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters -Property $PSBoundParameters
+    $Proxy.RunScript($RunScriptParameters)
+}
+
+function Invoke-InDesignServerJSX {
+    param (
         $ScriptConent
     )
 
     $Proxy
     
     $RunScriptParameters = New-Object -TypeName InDesignServer.RunScriptParameters
+    $RunScriptParameters.scriptText = 
     $Proxy.RunScript($RunScriptParameters)
 }
