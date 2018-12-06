@@ -50,19 +50,46 @@ function Start-InDesignServerService {
     Get-InDesignServerService | Start-Service
 }
 
+function Stop-InDesignServerService {
+    Get-InDesignServerService | Stop-Service
+}
+
 function Restart-InDesignServerService {
     Get-InDesignServerService | Restart-Service -Force
 }
 
 function New-InDesignServerInstance {
     param (
-        $Port
+        [Parameter(ValueFromPipelineByPropertyName)]$Port = 8080,
+        [Parameter(ValueFromPipelineByPropertyName)]$ComputerName = (Get-InDesignServerComputerName),
+        $RemoteAddress
     )
-    $GUID = New-Guid | Select-Object -ExpandProperty GUID
-    New-Item -Path HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService -Name $Guid
-    $ComputerName = Get-InDesignServerComputerName
-    $Name = "InDesignServer $Port $GUID"
-    New-TervisFirewallRule -ComputerName $ComputerName -DisplayName $Name -Name $Name -LocalPort $Port -Direction Inbound -Action Allow -Group InDesignServer
+    begin {
+        $PortsCurrentlyUsed = Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+            Get-ChildItem -Path HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService | 
+            Get-ItemProperty | 
+            Select-Object -ExpandProperty Port
+        }
+    }
+    process {
+        if ($Port -notin $PortsCurrentlyUsed) {
+            $GUID = New-Guid | Select-Object -ExpandProperty GUID
+        
+            Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+                $RegistryKeyPath = "HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService\$Using:GUID"
+                New-Item -Path $RegistryKeyPath
+                New-ItemProperty -Path $RegistryKeyPath -Name CommandLineArgs
+                New-ItemProperty -Path $RegistryKeyPath -Name MaximumFailureCount -Value 10
+                New-ItemProperty -Path $RegistryKeyPath -Name MaximumFailureIntervalInMinutes -Value 1440
+                New-ItemProperty -Path $RegistryKeyPath -Name Port -Value $Using:Port
+                New-ItemProperty -Path $RegistryKeyPath -Name TrackFailures -Value 1
+            }
+        }
+    
+        $Name = "InDesignServer instance on port $Port"
+        $RemoteAddressParameter = $PSBoundParameters | ConvertFrom-PSBoundParameters -AsHashTable -Property RemoteAddress
+        New-TervisFirewallRule -ComputerName $ComputerName -DisplayName $Name -Name $Name -LocalPort $Port -Direction Inbound -Action Allow -Group InDesignServer @RemoteAddressParameter
+    }
 }
 
 function Get-InDesignServerWSDLURI {
@@ -78,17 +105,24 @@ function Get-InDesignServerWSDLURI {
 function Get-InDesignServerWSDL {
     param (
         $ComputerName = (Get-InDesignServerComputerName),
-        $Port = 8080
+        $Port = 8080,
+        [Switch]$WithoutFix
     )
-    Invoke-WebRequest -Uri (
+    $WSDL = Invoke-WebRequest -Uri (
         Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
     ) | 
-    Select-Object -ExpandProperty Content |
-    Replace-ContentValue -OldValue @"
+    Select-Object -ExpandProperty Content 
+    
+    if ($WithoutFix) {
+        $WSDL
+    } else {
+        $WSDL |
+        Replace-ContentValue -OldValue @"
 <SOAP:address location="http://localhost:$Port"/>
 "@ -NewValue @"
 <SOAP:address location="http://$($ComputerName):$Port"/>
 "@
+    }
 }
 
 function Get-InDesignServerWebServiceProxy {
