@@ -1,9 +1,8 @@
 ipmo -force AdobeInDesignServerPowerShell
 
 Set-InDesignServerComputerName -ComputerName INF-InDesign01.tervis.prv
-Invoke-InDesignServerRunScript -ScriptText "test"
 
-Get-InDesignServerWSDL
+while ($True) {Get-InDesignServerWSDL}
 
 
 $JSXFileContent = $OrderDetail | Get-WebToPrintInDesignJSX
@@ -58,12 +57,12 @@ $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @
     ScriptLanguage = "javascript"
 }
 
-$Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @{
-    ScriptText = @"
-app.pdfExportPresets.itemByName("[TervisWebToPrint]").name
-"@
-    ScriptLanguage = "javascript"
-}
+# $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @{
+#     ScriptText = @"
+# app.pdfExportPresets.itemByName("[TervisWebToPrint]").name
+# "@
+#     ScriptLanguage = "javascript"
+# }
 
 
 $ErrorString = ""
