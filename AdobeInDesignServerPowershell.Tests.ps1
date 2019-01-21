@@ -52,8 +52,21 @@ $Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Ur
 $Proxy.Url = "http://$($ComputerName):8080/"
 $Proxy.Url = "http://$($ComputerName):8082/"
 
+$Proxy2 = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
+    Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
+)
+$Proxy2.Url = "http://$($ComputerName):8080/"
+
+
 $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @{
     ScriptText = $ScriptText
+    ScriptLanguage = "javascript"
+}
+
+$Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @{
+    ScriptText = @"
+$.writeln("test");
+"@
     ScriptLanguage = "javascript"
 }
 
@@ -67,10 +80,38 @@ $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @
 
 $ErrorString = ""
 $Results = New-Object -TypeName InDesignServer.Data
-
+$SessionID = $Proxy.BeginSessionAsync()
+$SessionID = $Proxy.BeginSession()
 $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
 $Response
 $ErrorString
 $Results
+$proxy.EndSession($SessionID)
 
 Invoke-InDesignServerRunScript -ScriptText $ScriptText
+
+
+
+Start-RSJob -ScriptBlock
+$ComputerName = "INF-InDesign01.tervis.prv"
+$Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
+    Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
+)
+$Proxy.Url = "http://$($ComputerName):8080/"
+
+$Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property @{
+    ScriptText = @"
+$.writeln("test");
+"@
+    ScriptLanguage = "javascript"
+}
+
+$ErrorString = ""
+$Results = New-Object -TypeName InDesignServer.Data
+$SessionID = $Proxy.BeginSessionAsync()
+$SessionID = $Proxy.BeginSession()
+$Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+$Response
+$ErrorString
+$Results
+$proxy.EndSession($SessionID)
