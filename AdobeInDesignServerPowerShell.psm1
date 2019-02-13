@@ -6,9 +6,9 @@ function Set-InDesignServerComputerName {
         $ComputerName
     )
     $Script:ComputerName = $ComputerName
-    $Script:Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
-        Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
-    )
+    # $Script:Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
+    #     Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
+    # )
 }
 
 function Get-InDesignServerComputerName {
@@ -19,13 +19,18 @@ function Get-InDesignServerInstallPath {
     param (
         [Switch]$Remote
     )
-    $LocalPath = "C:\Program Files\Adobe\Adobe InDesign CC Server 2018"
+    $ComputerName = Get-InDesignServerComputerName
+    $InDesignServerInstallPath = Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+        Get-ChildItem -LiteralPath "C:\Program Files\Adobe\" |
+        Where-Object Name -Match "InDesign CC Server" |
+        Select-Object -ExpandProperty FullName
+    }
+    
     if (-not $Remote) {
-        $LocalPath
+        $InDesignServerInstallPath
     } else {
-        $ComputerName = Get-InDesignServerComputerName
-        $LocalPath | ConvertTo-RemotePath -ComputerName $ComputerName
-    }  
+        $InDesignServerInstallPath | ConvertTo-RemotePath -ComputerName $ComputerName
+    }
 }
 
 function Get-InDesignServerService {
@@ -34,16 +39,23 @@ function Get-InDesignServerService {
 }
 
 function Install-InDesignServerService {
-    param (
+    $InDesignServerInstallPath = Get-InDesignServerInstallPath
+    
+    $ComputerName = Get-InDesignServerComputerName
+    Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+        & "$Using:InDesignServerInstallPath\InDesignServerService.exe" /install
+    }
 
-    )
-    .\InDesignServerService.exe /install
-    Get-InDesignServerService | 
+    Get-InDesignServerService |
     Set-Service -StartupType Automatic #-Credential $(New-Crednetial -Username system) Only is PS 6+
 }
 
 function Install-InDesignServerMMCSnapIn {
-    regsvr32.exe .\InDesignServerMMC64.dll
+    $ComputerName = Get-InDesignServerComputerName
+    $InDesignServerInstallPath = Get-InDesignServerInstallPath -ComputerName $ComputerName
+    Invoke-Command -ComputerName $ComputerName -ScriptBlock {
+        regsvr32.exe /s $InDesignServerInstallPath\InDesignServerMMC64.dll
+    }
 }
 
 function Start-InDesignServerService {
