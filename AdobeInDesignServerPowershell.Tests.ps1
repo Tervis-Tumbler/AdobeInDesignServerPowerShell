@@ -108,10 +108,76 @@ $.writeln("test");
 
 $ErrorString = ""
 $Results = New-Object -TypeName InDesignServer.Data
-$SessionID = $Proxy.BeginSessionAsync()
+
 $SessionID = $Proxy.BeginSession()
 $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
 $Response
 $ErrorString
 $Results
 $proxy.EndSession($SessionID)
+
+
+
+
+function Test-NewInDesignServerInstance {
+    Set-InDesignServerComputerName -ComputerName INF-InDesign02.tervis.prv
+    $ComputerName = "INF-InDesign02.tervis.prv"
+    $Port = 8081
+
+    $Proxy = New-WebServiceProxy -Class "InDesignServer$Port" -Namespace "InDesignServer$Port" -Uri (
+        Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port $Port
+    )
+    $Proxy.Url = "http://$($ComputerName):$Port/"
+    $Proxy
+
+    $Parameter = New-Object -TypeName "InDesignServer$Port.RunScriptParameters" -Property @{
+        ScriptText = @"
+"test"
+"@
+        ScriptLanguage = "javascript"
+    }
+
+    $ErrorString = ""
+    $Results = New-Object -TypeName "InDesignServer$Port.Data"
+
+    $SessionID = $Proxy.BeginSession()
+    $SessionID
+    $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+    $Response
+    $ErrorString
+    $Results.data
+    $proxy.EndSession($SessionID)
+
+    Measure-command {
+        1..10000 | % {
+            $SessionID = $Proxy.BeginSession()
+            $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+            $proxy.EndSession($SessionID)
+        }
+    }
+
+    Start-RSJob -ScriptBlock {
+        $ComputerName = "INF-InDesign02.tervis.prv"
+        $Port = 8081
+
+        $Proxy = New-WebServiceProxy -Class "InDesignServer$Port" -Namespace "InDesignServer$Port" -Uri (
+            Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port $Port
+        )
+        $Proxy.Url = "http://$($ComputerName):$Port/"
+        $Parameter = New-Object -TypeName "InDesignServer$Port.RunScriptParameters" -Property @{
+            ScriptText = @"
+"test"
+"@
+            ScriptLanguage = "javascript"
+        }
+
+        $ErrorString = ""
+        $Results = New-Object -TypeName "InDesignServer$Port.Data"
+        $SessionID = $Proxy.BeginSession()
+        1..1000 | % {
+            $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+        }
+        $proxy.EndSession($SessionID)
+    }
+}
+
