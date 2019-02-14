@@ -77,8 +77,13 @@ function New-InDesignServerInstance {
         $RemoteAddress
     )
     begin {
+        #This seems to be a magic string specific to each version of InDesignServer
+        #Need a mapping for version numbers to magic strings and then a way to pull out version number from server to make this dynamic
+        $ServiceRegistryKeyName = "InDesignCCServer2019WinService" 
+        $InDesignServerServiceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceRegistryKeyName"
+
         $PortsCurrentlyUsed = Invoke-Command -ComputerName $ComputerName -ScriptBlock {
-            Get-ChildItem -Path HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService | 
+            Get-ChildItem -Path $Using:InDesignServerServiceRegistryPath | 
             Get-ItemProperty | 
             Select-Object -ExpandProperty Port
         }
@@ -87,8 +92,8 @@ function New-InDesignServerInstance {
         if ($Port -notin $PortsCurrentlyUsed) {
             $GUID = New-Guid | Select-Object -ExpandProperty GUID
         
-            Invoke-Command -ComputerName $ComputerName -ScriptBlock {
-                $RegistryKeyPath = "HKLM:\SYSTEM\CurrentControlSet\Services\InDesignCCServer2017WinService\$Using:GUID"
+            Invoke-Command -ComputerName $ComputerName -ScriptBlock {                
+                $RegistryKeyPath = "$Using:InDesignServerServiceRegistryPath\$Using:GUID"
                 New-Item -Path $RegistryKeyPath
                 New-ItemProperty -Path $RegistryKeyPath -Name CommandLineArgs
                 New-ItemProperty -Path $RegistryKeyPath -Name MaximumFailureCount -Value 10
