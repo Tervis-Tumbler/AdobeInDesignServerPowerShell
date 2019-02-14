@@ -92,7 +92,6 @@ Invoke-InDesignServerRunScript -ScriptText $ScriptText
 
 
 
-Start-RSJob -ScriptBlock
 $ComputerName = "INF-InDesign01.tervis.prv"
 $Proxy = New-WebServiceProxy -Class InDesignServer -Namespace InDesignServer -Uri (
     Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port 8080
@@ -118,6 +117,40 @@ $proxy.EndSession($SessionID)
 
 
 
+
+function Test-InDesignMultiInstancePerf {
+    Set-InDesignServerComputerName -ComputerName INF-InDesign02.tervis.prv
+    $ComputerName = "INF-InDesign02.tervis.prv"
+    $Port = 8083
+
+    $Proxy = New-WebServiceProxy -Class "InDesignServer$Port" -Namespace "InDesignServer$Port" -Uri (
+        Get-InDesignServerWSDLURI -ComputerName $ComputerName -Port $Port
+    )
+    $Proxy.Url = "http://$($ComputerName):$Port/"
+    $Proxy
+
+    $Parameter = New-Object -TypeName "InDesignServer$Port.RunScriptParameters" -Property @{
+        ScriptText = @"
+"test"
+"@
+        ScriptLanguage = "javascript"
+    }
+
+    $ErrorString = ""
+    $Results = New-Object -TypeName "InDesignServer$Port.Data"
+
+    $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+    $Response
+    $ErrorString
+    $Results.data
+
+
+    Measure-command {
+        1..10000 | % {
+            $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
+        }
+    }
+}
 
 function Test-NewInDesignServerInstance {
     Set-InDesignServerComputerName -ComputerName INF-InDesign02.tervis.prv
