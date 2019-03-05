@@ -15,6 +15,26 @@ function Get-InDesignServerComputerName {
     $Script:ComputerName
 }
 
+function New-InDesignServerInstance {
+    param (
+        [Parameter(Mandatory)]$ComputerName,
+        [Parameter(Mandatory)]$Port
+    )
+    $PSBoundParameters | 
+    ConvertFrom-PSBoundParameters |
+    Add-Member -PassThru -MemberType ScriptProperty -Name WebServiceProxy -Value {
+        $This | Add-Member -Force -MemberType NoteProperty -Name WebServiceProxy -Value $(
+            $Proxy = New-WebServiceProxy -Class "InDesignServer$($This.Port)" -Namespace "InDesignServer$($This.Port)" -Uri (
+                Get-InDesignServerWSDLURI -ComputerName $This.ComputerName -Port $This.Port
+            )
+            $Proxy.Url = "http://$($This.ComputerName):$($This.Port)/"
+            $Proxy
+        )
+        $This.WebServiceProxy
+    } |
+    Add-Member -MemberType NoteProperty -Name Locked -Value $False -Force -PassThru
+}
+
 function Get-InDesignServerInstallPath {
     param (
         [Switch]$Remote
@@ -70,7 +90,7 @@ function Restart-InDesignServerService {
     Get-InDesignServerService | Restart-Service -Force
 }
 
-function New-InDesignServerInstance {
+function Invoke-InDesignServerInstanceProvision {
     param (
         [Parameter(ValueFromPipelineByPropertyName)]$Port = 8080,
         [Parameter(ValueFromPipelineByPropertyName)]$ComputerName = (Get-InDesignServerComputerName),
@@ -154,15 +174,17 @@ function Invoke-InDesignServerAPI {
     param (
         $MethodName,
         $Parameter,
-        $Property
+        $Property,
+        [Parameter(Mandatory)]$InDesignServerInstance
     )
-    $Proxy = Get-InDesignServerWebServiceProxy
-
+    #$Proxy = Get-InDesignServerWebServiceProxy
+    $InDesignServerInstance
     if (-not $Parameter) {
+        $TypeName = "InDesignServer$($InDesignServerInstance.Port).$($MethodName)Parameters"
         if ($Property) {
-            $Parameter = New-Object -TypeName InDesignServer."$($MethodName)Parameters" -Property $Property
+            $Parameter = New-Object -TypeName $TypeName -Property $Property
         } else {
-            $Parameter = New-Object -TypeName InDesignServer."$($MethodName)Parameters"
+            $Parameter = New-Object -TypeName $TypeName
         }
     }
     $Response = $Proxy.$MethodName($Parameter)
@@ -171,20 +193,46 @@ function Invoke-InDesignServerAPI {
 
 function Invoke-InDesignServerRunScript {
     param (
-        $ScriptText,
+        [Parameter(Mandatory)]$ScriptText,
         $ScriptLanguage,
         $ScriptFile,
-        $ScriptArgs
-    )    
-    #Invoke-InDesignServerAPI -MethodName RunScript -Property $PSBoundParameters
+        $ScriptArgs,
+        [Parameter(Mandatory)]$InDesignServerInstance
+    )
+    #Invoke-InDesignServerAPI -MethodName RunScript -Property $PSBoundParameters -Parameter
 
-    $Proxy = Get-InDesignServerWebServiceProxy
-    $Parameter = New-Object -TypeName InDesignServer.RunScriptParameters -Property $PSBoundParameters
+    $MethodName = "RunScript"
+    $Parameter = New-Object -TypeName "InDesignServer$($InDesignServerInstance.Port).$($MethodName)Parameters" -Property $PSBoundParameters
     $ErrorString = ""
-    $Results = New-Object -TypeName InDesignServer.Data
+    $Results = New-Object -TypeName "InDesignServer$($InDesignServerInstance.Port).Data"
 
+    $Proxy = $InDesignServerInstance.WebServiceProxy
     $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
-    $Response.result
+    if ($ErrorString) { Write-Error -Message $ErrorString }
+    if ($Response.result) { Write-Verbose -Message $Response.result }
+    $Response
+}
+
+function Invoke-InDesignServerRunScriptDirectlyWithInlineSOAP {
+    param (
+        [Parameter(Mandatory)]$InDesignServerInstance,
+        [Parameter(Mandatory)]$ScriptText
+    )
+    $Body = @"
+<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <soap:Body>
+        <RunScript xmlns="http://ns.adobe.com/InDesign/soap/">
+            <runScriptParameters xmlns="">
+                <scriptText>$ScriptText</scriptText>
+                <scriptLanguage>javascript</scriptLanguage>
+                <scriptFile xsi:nil="true" />
+            </runScriptParameters>
+        </RunScript>
+    </soap:Body>
+</soap:Envelope>
+"@
+    Invoke-WebRequest -Uri "http://$($InDesignServerInstance.ComputerName):$($InDesignServerInstance.Port)/" -UseBasicParsing -Method Post -Body $Body -Headers @{SOAPAction = ""} -ContentType "text/xml; charset=utf-8"
 }
 
 function Invoke-InDesignServerJSX {
