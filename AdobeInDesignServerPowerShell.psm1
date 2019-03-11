@@ -201,8 +201,9 @@ function Invoke-InDesignServerRunScript {
     )
     #Invoke-InDesignServerAPI -MethodName RunScript -Property $PSBoundParameters -Parameter
 
+    $PropertyHash = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty InDesignServerInstance -AsHashTable
     $MethodName = "RunScript"
-    $Parameter = New-Object -TypeName "InDesignServer$($InDesignServerInstance.Port).$($MethodName)Parameters" -Property $PSBoundParameters
+    $Parameter = New-Object -TypeName "InDesignServer$($InDesignServerInstance.Port).$($MethodName)Parameters" -Property $PropertyHash
     $ErrorString = ""
     $Results = New-Object -TypeName "InDesignServer$($InDesignServerInstance.Port).Data"
 
@@ -210,7 +211,7 @@ function Invoke-InDesignServerRunScript {
     $Response = $Proxy.RunScript($Parameter, [Ref]$ErrorString, [ref]$Results)
     if ($ErrorString) { Write-Error -Message $ErrorString }
     if ($Response.result) { Write-Verbose -Message $Response.result }
-    $Response
+    $Results
 }
 
 function Invoke-InDesignServerRunScriptDirectlyWithInlineSOAP {
@@ -224,7 +225,7 @@ function Invoke-InDesignServerRunScriptDirectlyWithInlineSOAP {
     <soap:Body>
         <RunScript xmlns="http://ns.adobe.com/InDesign/soap/">
             <runScriptParameters xmlns="">
-                <scriptText>$ScriptText</scriptText>
+                <scriptText>$([System.Security.SecurityElement]::Escape($ScriptText))</scriptText>
                 <scriptLanguage>javascript</scriptLanguage>
                 <scriptFile xsi:nil="true" />
             </runScriptParameters>
