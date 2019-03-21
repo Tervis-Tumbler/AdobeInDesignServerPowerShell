@@ -234,7 +234,14 @@ function Invoke-InDesignServerRunScriptDirectlyWithInlineSOAP {
     </soap:Body>
 </soap:Envelope>
 "@
-    Invoke-WebRequest -Uri "http://$($InDesignServerInstance.ComputerName):$($InDesignServerInstance.Port)/" -UseBasicParsing -Method Post -Body $Body -Headers @{SOAPAction = ""} -ContentType "text/xml; charset=utf-8"
+    [xml]$ResponseXML = Invoke-WebRequest -Uri "http://$($InDesignServerInstance.ComputerName):$($InDesignServerInstance.Port)/" -UseBasicParsing -Method Post -Body $Body -Headers @{SOAPAction = ""} -ContentType "text/xml; charset=utf-8" |
+    Select-Object -ExpandProperty Content
+
+    if ($ResponseXML.Envelope.body.runscriptresponse.errorString) {
+        throw "Error number $($ResponseXML.Envelope.body.runscriptresponse.errorNumber) $($ResponseXML.Envelope.body.runscriptresponse.errorString)"
+    } else {
+        $ResponseXML.Envelope.body.runscriptresponse.scriptResult
+    }
 }
 
 function Invoke-InDesignServerJSX {
