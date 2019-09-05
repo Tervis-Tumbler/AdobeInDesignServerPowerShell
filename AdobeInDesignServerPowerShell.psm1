@@ -256,7 +256,7 @@ function Set-InDesingServerJobOption {
         $LocalPathToJobOptions
     )
     $LocalPathToJobOptions
-    $PathToJobOptionsFolder = "C:\Program Files\Adobe\Adobe InDesign CC Server 2018\Resources\Adobe PDF\settings\mul"
+    $PathToJobOptionsFolder = "C:\Program Files\Adobe\Adobe InDesign CC Server 2019\Resources\Adobe PDF\settings\mul"
     $InDesignServerComputerName = Get-InDesignServerComputerName
     $PathToJobOptionsFolderRemote = $PathToJobOptionsFolder | ConvertTo-RemotePath -ComputerName $InDesignServerComputerName
     Copy-Item -Path $LocalPathToJobOptions -Destination $PathToJobOptionsFolderRemote
